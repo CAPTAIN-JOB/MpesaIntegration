@@ -1,5 +1,5 @@
-import { MPESA_SHORTCODE, MPESA_PASSKEY } from "../config/env.js";
-import MpesaTransaction from "../schema/mpesaTransaction.schema.js";
+import { MPESA_SHORTCODE, MPESA_PASSKEY,PHONE_NUMBER,CALLBACK_URL } from "../config/env.js";
+import transactonSchema from "../schema/mpesaTransaction.schema.js";
 import { getAccessToken } from "./accessToken.controllers.js";
 import axios from "axios";
 
@@ -15,10 +15,9 @@ const getTimestamp = () => {
   return date.toISOString().replace(/[-T:Z.]/g, "").substring(0, 14);
 };
 
-// 🚀 FIXED stkPush Function
 export const stkPush = async (req, res) => {
-  const { phoneNumber, amount} = req.body;
-  const formattedPhone = formatPhoneNumber(phoneNumber);
+  const { phoneNumber, amount, reference } = req.body;
+  const formattedNumber = formatPhoneNumber(phoneNumber);
   const timestamp = getTimestamp();
   const password = Buffer.from(
     `${MPESA_SHORTCODE}${MPESA_PASSKEY}${timestamp}`
@@ -32,11 +31,11 @@ export const stkPush = async (req, res) => {
       Timestamp: timestamp,
       TransactionType: "CustomerPayBillOnline",
       Amount: amount,
-      PartyA: formattedPhone, // ✅ Corrected PartyA
+      PartyA: formattedNumber, // Fix: Use formatted phone here
       PartyB: MPESA_SHORTCODE,
-      PhoneNumber: formattedPhone,
+      PhoneNumber:formattedNumber,
       CallBackURL: `${process.env.CALLBACK_URL}/stk-callback`,
-      AccountReference: reference || "TEST123",
+      AccountReference: "FidmindBookStore",
       TransactionDesc: "Payment",
     };
 
@@ -48,18 +47,21 @@ export const stkPush = async (req, res) => {
 
     console.log("STK Push Response:", response.data);
 
-    // ✅ Save transaction with "PENDING" status
-    await MpesaTransaction.create({
-      phoneNumber: formattedPhone,
+    const { CheckoutRequestID } = response.data;
+
+    // Save transaction details
+    await transactonSchema.create({
+      phoneNumber: formattedNumber,
       amount,
       status: "PENDING",
-      
-      checkoutRequestId: response.data.CheckoutRequestID, // ✅ Save ID
+      reference,
+      checkoutRequestId: CheckoutRequestID,
       responsePayload: response.data,
     });
 
-    // ✅ Send response back to client
+    // Send response to client immediately
     res.json({ success: true, data: response.data });
+
   } catch (error) {
     console.error("STK Push Error:", error.response?.data || error.message);
     res.status(500).json({
@@ -70,50 +72,37 @@ export const stkPush = async (req, res) => {
   }
 };
 
-// 🚀 FIXED stkCallback Function
 export const stkCallback = async (req, res) => {
   try {
     console.log("STK Callback Received:", req.body);
 
     const { Body } = req.body;
     if (!Body || !Body.stkCallback) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid callback data" });
+      return res.status(400).json({ success: false, message: "Invalid callback data" });
     }
 
     const { ResultCode, CheckoutRequestID, ResultDesc } = Body.stkCallback;
 
-    // ✅ Find transaction using CheckoutRequestID
-    const transaction = await MpesaTransaction.findOne({
-      checkoutRequestId: CheckoutRequestID,
-    });
+    // Find the transaction using the CheckoutRequestID
+    const transaction = await transactonSchema.findOne({ checkoutRequestId: CheckoutRequestID });
 
     if (!transaction) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Transaction not found" });
+      return res.status(404).json({ success: false, message: "Transaction not found" });
     }
 
-    // ✅ Update status based on ResultCode
+    // Update status based on ResultCode
     transaction.status = ResultCode === 0 ? "SUCCESS" : "FAILED";
     transaction.resultCode = ResultCode;
     transaction.resultDesc = ResultDesc;
     transaction.responsePayload = Body;
 
-    // ✅ Save the updated transaction
+    // Save the updated transaction
     await transaction.save();
 
-    console.log(`✅ Transaction Updated: ${transaction.status}`);
-
-    return res
-      .status(200)
-      .json({ success: true, message: "Transaction updated", status: transaction.status });
+    return res.status(200).json({ success: true, message: "Transaction updated" });
   } catch (error) {
     console.error("STK Callback Error:", error.message);
-    return res
-      .status(500)
-      .json({ success: false, message: "Callback processing failed" });
+    return res.status(500).json({ success: false, message: "Callback processing failed" });
   }
 };
 

@@ -10,7 +10,13 @@ const mpesaTransactionSchema = new mongoose.Schema({
     default: "PENDING",
   },
   resultCode: { type: String }, // API response code
-  createdAt: { type: Date, default: Date.now },
+  createdAt: { type: String },
+});
+
+mpesaTransactionSchema.pre("save", function (next) {
+  const date = new Date();
+  this.createdAt = date.toLocaleString("en-KE", { timeZone: "Africa/Nairobi" }); // Kenya Time Zone
+  next();
 });
 
 const MpesaTransaction = mongoose.model(

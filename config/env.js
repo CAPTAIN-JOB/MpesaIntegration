@@ -13,4 +13,6 @@ export const {
   MPESA_SHORTCODE,
   MPESA_PASSKEY,
   MPESA_BASE_URL,
+  PHONE_NUMBER,
+CALLBACK_URL
 } = process.env;
