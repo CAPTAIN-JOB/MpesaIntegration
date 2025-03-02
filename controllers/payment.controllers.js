@@ -3,12 +3,20 @@ import transactonSchema from "../schema/mpesaTransaction.schema.js";
 import { getAccessToken } from "./accessToken.controllers.js";
 import axios from "axios";
 
-const formatPhoneNumber = (phone) => {
-  if (phone.startsWith("0")) {
-    return "254" + phone.substring(1);
+const formattedNumber = (phone) => {
+  if (!phone) {
+    throw new Error("Phone number is required");
   }
-  return phone;
-};
+
+  // Normalize the phone number to the 254 format
+  if (phone.startsWith("0")) {
+    return "254" + phone.slice(1); // Convert 07xxxxxxxx → 2547xxxxxxxx
+  } else if (phone.startsWith("254")) {
+    return phone; // Already in the correct format
+  } else {
+    throw new Error("Invalid phone number format");
+  }
+}
 
 const getTimestamp = () => {
   const date = new Date();

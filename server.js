@@ -9,6 +9,10 @@ import paymentRoute from "./routes/stk-push.route.js";
 const app = express();
 
 app.use(express.json());
+app.use(cors({
+   origin: "http://localhost:5173", // Your Vite frontend URL
+    methods: ["GET", "POST", "PUT", "DELETE"],
+}))
 
 app.get("/", (req, res) => {
   res.send("Hello Welcome Home");
